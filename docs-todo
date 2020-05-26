@@ -1,0 +1,4 @@
+setting up aws-lambda-haskell-runtime
+making your wai handler
+deploying to lambda
+setting up API gateway with {proxy+}
