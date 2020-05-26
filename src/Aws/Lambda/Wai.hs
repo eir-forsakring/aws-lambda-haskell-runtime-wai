@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Aws.Lambda.Wai where
+module Aws.Lambda.Wai (waiHandler) where
 
 import           Aws.Lambda
 import           Control.Concurrent.MVar
