@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 58ae59d7019f750251cf014c97a3a8525698f9b9a36d9c8e11e930c025b32685
+-- hash: e6315781cf0d733201881c319ad4e9704d0d680c3c2ca6da82516f2999d44892
 
 name:           aws-lambda-haskell-runtime-wai
 version:        0.1.0.0
@@ -34,7 +34,7 @@ library
       src
   build-depends:
       aeson
-    , aws-lambda-haskell-runtime ==2.0.5
+    , aws-lambda-haskell-runtime >=2.0.5
     , base >=4.7 && <5
     , binary
     , bytestring
@@ -58,7 +58,7 @@ test-suite aws-lambda-haskell-runtime-wai-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
-    , aws-lambda-haskell-runtime ==2.0.5
+    , aws-lambda-haskell-runtime >=2.0.5
     , aws-lambda-haskell-runtime-wai
     , base >=4.7 && <5
     , binary

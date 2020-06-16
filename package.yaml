@@ -21,7 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/eir-
 
 dependencies:
 - base >= 4.7 && < 5
-- aws-lambda-haskell-runtime == 2.0.5
+- aws-lambda-haskell-runtime >= 2.0.5
 - bytestring
 - text
 - binary

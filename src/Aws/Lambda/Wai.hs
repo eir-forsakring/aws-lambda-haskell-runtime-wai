@@ -32,9 +32,9 @@ import qualified Network.Wai             as Wai
 import qualified Network.Wai.Internal    as Wai
 import           Text.Read               (readMaybe)
 
-type WaiHandler = ApiGatewayRequest Value -> Context -> IO (Either (ApiGatewayResponse Value) (ApiGatewayResponse Value))
+type WaiHandler context = ApiGatewayRequest Value -> Context context -> IO (Either (ApiGatewayResponse Value) (ApiGatewayResponse Value))
 
-waiHandler :: IO Wai.Application -> WaiHandler
+waiHandler :: forall context. IO Wai.Application -> WaiHandler context
 waiHandler initApp gatewayRequest _ = do
   waiApplication <- initApp
   waiRequest <- mkWaiRequest gatewayRequest
