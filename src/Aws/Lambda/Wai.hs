@@ -61,7 +61,7 @@ mkWaiRequest ApiGatewayRequest{..} = do
 
   let pathInfo = H.decodePathSegments (encodeUtf8 apiGatewayRequestPath)
 
-  let requestBodyRaw = BL.toStrict . encode $ apiGatewayRequestBody
+  let requestBodyRaw = maybe mempty T.encodeUtf8 apiGatewayRequestBody
   let requestBodyLength = Wai.KnownLength $ fromIntegral $ BS.length requestBodyRaw
 
   requestBodyMVar <- newMVar requestBodyRaw
