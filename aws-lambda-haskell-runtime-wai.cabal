@@ -4,11 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e6315781cf0d733201881c319ad4e9704d0d680c3c2ca6da82516f2999d44892
+-- hash: 84d5705be40077a09e34d445f54b862f58447fa5abac05fd535936a3196c6bbb
 
 name:           aws-lambda-haskell-runtime-wai
-version:        0.1.0.0
+version:        1.0.0
+synopsis:       Run wai applications on AWS Lambda
 description:    Please see the README on GitHub at <https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai#readme>
+category:       AWS
 homepage:       https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai#readme
 bug-reports:    https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai/issues
 author:         Dobromir Nikolov
@@ -34,7 +36,7 @@ library
       src
   build-depends:
       aeson
-    , aws-lambda-haskell-runtime >=2.0.5
+    , aws-lambda-haskell-runtime >=3.0.0
     , base >=4.7 && <5
     , binary
     , bytestring
@@ -58,7 +60,7 @@ test-suite aws-lambda-haskell-runtime-wai-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
-    , aws-lambda-haskell-runtime >=2.0.5
+    , aws-lambda-haskell-runtime >=3.0.0
     , aws-lambda-haskell-runtime-wai
     , base >=4.7 && <5
     , binary

@@ -1,5 +1,5 @@
 name:                aws-lambda-haskell-runtime-wai
-version:             0.1.0.0
+version:             1.0.0
 github:              "eir-forsakring/aws-lambda-haskell-runtime-wai"
 license:             BSD3
 author:              "Dobromir Nikolov"
@@ -11,8 +11,8 @@ extra-source-files:
 - ChangeLog.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            Run wai applications on AWS Lambda
+category:            AWS
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
@@ -21,7 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/eir-
 
 dependencies:
 - base >= 4.7 && < 5
-- aws-lambda-haskell-runtime >= 2.0.5
+- aws-lambda-haskell-runtime >= 3.0.0
 - bytestring
 - text
 - binary

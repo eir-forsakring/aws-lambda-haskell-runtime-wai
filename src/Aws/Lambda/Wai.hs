@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Aws.Lambda.Wai (waiHandler, WaiHandler) where
+module Aws.Lambda.Wai (waiHandler, waiHandler', WaiHandler) where
 
 import           Aws.Lambda
 import           Control.Concurrent.MVar
@@ -35,8 +34,16 @@ import           Text.Read               (readMaybe)
 type WaiHandler context = ApiGatewayRequest Text -> Context context -> IO (Either (ApiGatewayResponse Text) (ApiGatewayResponse Text))
 
 waiHandler :: forall context. IO Wai.Application -> WaiHandler context
-waiHandler initApp gatewayRequest _ = do
-  waiApplication <- initApp
+waiHandler initApp gatewayRequest context = initApp >>=
+  \app -> waiHandler'' app gatewayRequest context
+
+waiHandler' :: forall context. (context -> Wai.Application) -> WaiHandler context
+waiHandler' getApp request context = do
+  app <- getApp <$> readIORef (customContext context)
+  waiHandler'' app request context
+
+waiHandler'' :: forall context. Wai.Application -> WaiHandler context
+waiHandler'' waiApplication gatewayRequest _ = do
   waiRequest <- mkWaiRequest gatewayRequest
 
   (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
