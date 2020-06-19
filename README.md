@@ -26,3 +26,5 @@ data MyAppConfig =
   MyAppConfig
     { getWaiApp :: Application }
 ```
+
+For a complete example see [theam/aws-lambda-haskell-runtime/tree/master/examples/wai-app](https://github.com/theam/aws-lambda-haskell-runtime/examples/wai-app)
