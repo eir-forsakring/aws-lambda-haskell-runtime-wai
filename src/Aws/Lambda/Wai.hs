@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Aws.Lambda.Wai (waiHandler, WaiHandler) where
+module Aws.Lambda.Wai (waiHandler, waiHandler', WaiHandler) where
 
 import           Aws.Lambda
 import           Control.Concurrent.MVar
@@ -32,26 +31,35 @@ import qualified Network.Wai             as Wai
 import qualified Network.Wai.Internal    as Wai
 import           Text.Read               (readMaybe)
 
-type WaiHandler = ApiGatewayRequest Value -> Context -> IO (Either (ApiGatewayResponse Value) (ApiGatewayResponse Value))
+type WaiHandler context = ApiGatewayRequest Text -> Context context -> IO (Either (ApiGatewayResponse Text) (ApiGatewayResponse Text))
 
-waiHandler :: IO Wai.Application -> WaiHandler
-waiHandler initApp gatewayRequest _ = do
-  waiApplication <- initApp
+waiHandler :: forall context. IO Wai.Application -> WaiHandler context
+waiHandler initApp gatewayRequest context = initApp >>=
+  \app -> waiHandler'' app gatewayRequest context
+
+waiHandler' :: forall context. (context -> Wai.Application) -> WaiHandler context
+waiHandler' getApp request context = do
+  app <- getApp <$> readIORef (customContext context)
+  waiHandler'' app request context
+
+waiHandler'' :: forall context. Wai.Application -> WaiHandler context
+waiHandler'' waiApplication gatewayRequest _ = do
   waiRequest <- mkWaiRequest gatewayRequest
 
   (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
 
+  print $ "Working: " <> ("Something went wai" :: ByteString)
+  print $ "Actual response body (before decodeUtf8'): " <> body
+
   if BS.null body
-  then return . pure . wrapInResponseJSON (H.statusCode status) headers $ Null
+  then return . pure . wrapInResponse (H.statusCode status) headers $ mempty
   else case decodeUtf8' body of
-    Right responseBodyText ->
-      case eitherDecodeStrict @Value body of
-        Right validResponseJson ->
-          return . pure . wrapInResponseJSON (H.statusCode status) headers $ validResponseJson
-        Left err -> return . pure . wrapInResponseJSON 500 headers . String $ responseBodyText
+    Right responseBodyText -> do
+        print $ "After decoding in wai: " <> responseBodyText
+        return . pure . wrapInResponse (H.statusCode status) headers $ responseBodyText
     Left err -> error "Expected a response body that is valid UTF-8."
 
-mkWaiRequest :: ApiGatewayRequest Value -> IO Wai.Request
+mkWaiRequest :: ApiGatewayRequest Text -> IO Wai.Request
 mkWaiRequest ApiGatewayRequest{..} = do
   let ApiGatewayRequestContext{..} = apiGatewayRequestRequestContext
       ApiGatewayRequestContextIdentity{..} = apiGatewayRequestContextIdentity
@@ -60,7 +68,7 @@ mkWaiRequest ApiGatewayRequest{..} = do
 
   let pathInfo = H.decodePathSegments (encodeUtf8 apiGatewayRequestPath)
 
-  let requestBodyRaw = BL.toStrict . encode $ apiGatewayRequestBody
+  let requestBodyRaw = maybe mempty T.encodeUtf8 apiGatewayRequestBody
   let requestBodyLength = Wai.KnownLength $ fromIntegral $ BS.length requestBodyRaw
 
   requestBodyMVar <- newMVar requestBodyRaw
@@ -151,19 +159,18 @@ readResponse (Wai.responseToStream -> (st, hdrs, mkBody)) = do
   where
     drainBody :: Wai.StreamingBody -> IO ByteString
     drainBody body = do
-      ioref <- newIORef Binary.empty
+      ioRef <- newIORef Binary.empty
       body
-        (\b -> atomicModifyIORef ioref (\b' -> (b <> b', ())))
+        (\b -> atomicModifyIORef ioRef (\b' -> (b <> b', ())))
         (pure ())
-      BL.toStrict . Binary.toLazyByteString <$> readIORef ioref
+      BL.toStrict . Binary.toLazyByteString <$> readIORef ioRef
 
-wrapInResponseJSON
-  :: ToJSON res
-  => Int
+wrapInResponse
+  :: Int
   -> H.ResponseHeaders
   -> res
   -> ApiGatewayResponse res
-wrapInResponseJSON code responseHeaders response =
+wrapInResponse code responseHeaders response =
   ApiGatewayResponse code responseHeaders response False
 
 toHeader :: (Text, Text) -> H.Header
