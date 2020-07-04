@@ -48,14 +48,10 @@ waiHandler'' waiApplication gatewayRequest _ = do
 
   (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
 
-  print $ "Working: " <> ("Something went wai" :: ByteString)
-  print $ "Actual response body (before decodeUtf8'): " <> body
-
   if BS.null body
   then return . pure . wrapInResponse (H.statusCode status) headers $ mempty
   else case decodeUtf8' body of
-    Right responseBodyText -> do
-        print $ "After decoding in wai: " <> responseBodyText
+    Right responseBodyText ->
         return . pure . wrapInResponse (H.statusCode status) headers $ responseBodyText
     Left err -> error "Expected a response body that is valid UTF-8."
 
