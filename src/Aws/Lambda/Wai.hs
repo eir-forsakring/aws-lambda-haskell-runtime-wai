@@ -114,10 +114,10 @@ takeRequestBodyChunk requestBodyMVar = do
     Just bs -> pure bs
     Nothing -> pure BS.empty
 
-toQueryStringParameters :: Maybe [(Text, Maybe Text)] -> [H.QueryItem]
-toQueryStringParameters (Just params@(p:ps)) =
-  let toQueryItem (key, valueMay) = (encodeUtf8 key, encodeUtf8 <$> valueMay)
-  in map toQueryItem params
+toQueryStringParameters :: Maybe (HMap.HashMap Text Text) -> [H.QueryItem]
+toQueryStringParameters (Just params) =
+  let toQueryItem (key, value) = (encodeUtf8 key, Just $ encodeUtf8 value)
+  in map toQueryItem $ HMap.toList params
 toQueryStringParameters _ = []
 
 parseIp :: Maybe Text -> IO Socket.SockAddr
