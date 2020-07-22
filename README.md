@@ -1,4 +1,4 @@
-# aws-lambda-haskell-runtime-wai ![Haskell CI](https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai/workflows/Haskell%20CI/badge.svg)
+# aws-lambda-haskell-runtime-wai [![Hackage](https://img.shields.io/hackage/v/aws-lambda-haskell-runtime-wai.svg?style=flat)](http://hackage.haskell.org/package/aws-lambda-haskell-runtime-wai) ![Haskell CI](https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai/workflows/Haskell%20CI/badge.svg)
 
 ## Quick start
 
