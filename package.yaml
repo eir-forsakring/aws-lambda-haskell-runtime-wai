@@ -1,5 +1,5 @@
 name:                aws-lambda-haskell-runtime-wai
-version:             1.0.0
+version:             1.0.1
 github:              "eir-forsakring/aws-lambda-haskell-runtime-wai"
 license:             BSD3
 author:              "Dobromir Nikolov"
