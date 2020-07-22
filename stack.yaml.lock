@@ -5,12 +5,16 @@
 
 packages:
 - completed:
-    hackage: aws-lambda-haskell-runtime-3.0.0@sha256:1de27f1a3bdb85da3ebbc8a4f424c70fc72015c25cd22b13b79f4fa8dace30ff,3015
+    size: 30243
+    url: https://github.com/andys8/aws-lambda-haskell-runtime/archive/ab684e43d9e5abf285c488e5af4912c0a1b0dd43.tar.gz
+    name: aws-lambda-haskell-runtime
+    version: 3.0.1
+    sha256: 9620a334853ec6660fcfff6a7181ed273a4882bdaeb8717c6ddd6822332b8df9
     pantry-tree:
-      size: 1560
-      sha256: ce4852719b9a5e22d4d050b2e55a3e8b93a411e1ecf97d3a87ee46c705262f00
+      size: 3485
+      sha256: 9899dec0d6164e8d5aa464eff9acf7550f407607380c053722d5a975a6cc4802
   original:
-    hackage: aws-lambda-haskell-runtime-3.0.0
+    url: https://github.com/andys8/aws-lambda-haskell-runtime/archive/ab684e43d9e5abf285c488e5af4912c0a1b0dd43.tar.gz
 snapshots:
 - completed:
     size: 496120
