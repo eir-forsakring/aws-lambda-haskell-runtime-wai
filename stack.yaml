@@ -40,8 +40,7 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-- github: andys8/aws-lambda-haskell-runtime
-  commit: ab684e43d9e5abf285c488e5af4912c0a1b0dd43
+- aws-lambda-haskell-runtime-3.0.3
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
