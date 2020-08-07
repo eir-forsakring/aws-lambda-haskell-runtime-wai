@@ -1,5 +1,9 @@
 # Changelog for aws-lambda-haskell-runtime-wai
 
+## 1.0.2
+
+* Switched to aws-lambda-haskell-runtime 3.0.3
+
 ## 1.0.1
 
 * Removed forgotten print statements
