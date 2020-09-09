@@ -18,6 +18,7 @@ import qualified Data.CaseInsensitive    as CI
 import qualified Data.HashMap.Strict     as HMap
 import           Data.IORef
 import qualified Data.IP                 as IP
+import           Data.Maybe              (fromMaybe)
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Text.Encoding      (decodeUtf8', encodeUtf8)
@@ -70,10 +71,11 @@ mkWaiRequest ApiGatewayRequest{..} = do
   requestBodyMVar <- newMVar requestBodyRaw
 
   let requestBody = takeRequestBodyChunk requestBodyMVar
-  let requestHeaderHost = encodeUtf8 <$> HMap.lookup "host" apiGatewayRequestHeaders
-  let requestHeaderRange = encodeUtf8 <$> HMap.lookup "range" apiGatewayRequestHeaders
-  let requestHeaderReferer = encodeUtf8 <$> HMap.lookup "referer" apiGatewayRequestHeaders
-  let requestHeaderUserAgent = encodeUtf8 <$> HMap.lookup "User-Agent" apiGatewayRequestHeaders
+  let headers = fromMaybe HMap.empty apiGatewayRequestHeaders
+  let requestHeaderHost = encodeUtf8 <$> HMap.lookup "host" headers
+  let requestHeaderRange = encodeUtf8 <$> HMap.lookup "range" headers
+  let requestHeaderReferer = encodeUtf8 <$> HMap.lookup "referer" headers
+  let requestHeaderUserAgent = encodeUtf8 <$> HMap.lookup "User-Agent" headers
 
   let queryParameters = toQueryStringParameters apiGatewayRequestQueryStringParameters
       rawQueryString = H.renderQuery True queryParameters
@@ -84,7 +86,7 @@ mkWaiRequest ApiGatewayRequest{..} = do
                 httpVersion
                 (encodeUtf8 apiGatewayRequestPath)
                 rawQueryString
-                (map toHeader $ HMap.toList apiGatewayRequestHeaders)
+                (map toHeader $ HMap.toList headers)
                 True -- We assume it's always secure as we're passing through API Gateway
                 ip
                 pathInfo
