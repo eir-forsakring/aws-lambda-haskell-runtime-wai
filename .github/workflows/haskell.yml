@@ -10,11 +10,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - name: ACTIONS_ALLOW_UNSECURE_COMMANDS
+      id: ACTIONS_ALLOW_UNSECURE_COMMANDS
+      run: echo 'ACTIONS_ALLOW_UNSECURE_COMMANDS=true' >> $GITHUB_ENV
     - uses: actions/checkout@v1
     - uses: mstksg/setup-stack@v1
     - uses: actions/cache@v1
-      env:
-        ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
       name: Cache ~/.stack
       with:
         path: ~/.stack
@@ -23,8 +24,6 @@ jobs:
           ${{ runner.os }}-stack-
     - uses: actions/cache@v1
       name: Cache .stack-work
-      env:
-        ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
       with:
         path: .stack-work
         key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('**/*.hs') }}
