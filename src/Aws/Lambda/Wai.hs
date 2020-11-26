@@ -1,42 +1,44 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Aws.Lambda.Wai (waiHandler, waiHandler', WaiHandler) where
 
-import           Aws.Lambda
-import           Control.Concurrent.MVar
-import           Data.Aeson
-import qualified Data.Aeson              as Aeson
-import qualified Data.Aeson.Types        as Aeson
-import qualified Data.Binary.Builder     as Binary
-import           Data.ByteString         (ByteString)
-import qualified Data.ByteString         as BS
-import qualified Data.ByteString.Lazy    as BL
-import qualified Data.CaseInsensitive    as CI
-import qualified Data.HashMap.Strict     as HMap
-import           Data.IORef
-import qualified Data.IP                 as IP
-import           Data.Maybe              (fromMaybe)
-import           Data.Text               (Text)
-import qualified Data.Text               as T
-import           Data.Text.Encoding      (decodeUtf8', encodeUtf8)
-import qualified Data.Text.Encoding      as T
-import qualified Data.Vault.Lazy         as Vault
-import           GHC.IO.Unsafe           (unsafePerformIO)
-import qualified Network.HTTP.Types      as H
-import qualified Network.Socket          as Socket
-import           Network.Wai             (Application)
-import qualified Network.Wai             as Wai
-import qualified Network.Wai.Internal    as Wai
-import           Text.Read               (readMaybe)
+import Aws.Lambda
+import Control.Concurrent.MVar
+import Data.Aeson
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.Binary.Builder as Binary
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.CaseInsensitive as CI
+import qualified Data.HashMap.Strict as HMap
+import Data.IORef
+import qualified Data.IP as IP
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8', encodeUtf8)
+import qualified Data.Text.Encoding as T
+import qualified Data.Vault.Lazy as Vault
+import GHC.IO.Unsafe (unsafePerformIO)
+import qualified Network.HTTP.Types as H
+import qualified Network.Socket as Socket
+import Network.Wai (Application)
+import qualified Network.Wai as Wai
+import qualified Network.Wai.Internal as Wai
+import Text.Read (readMaybe)
 
 type WaiHandler context = ApiGatewayRequest Text -> Context context -> IO (Either (ApiGatewayResponse Text) (ApiGatewayResponse Text))
 
 waiHandler :: forall context. IO Wai.Application -> WaiHandler context
-waiHandler initApp gatewayRequest context = initApp >>=
-  \app -> waiHandler'' app gatewayRequest context
+waiHandler initApp gatewayRequest context =
+  initApp
+    >>= \app -> waiHandler'' app gatewayRequest context
 
 waiHandler' :: forall context. (context -> Wai.Application) -> WaiHandler context
 waiHandler' getApp request context = do
@@ -50,20 +52,30 @@ waiHandler'' waiApplication gatewayRequest _ = do
   (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
 
   if BS.null body
-  then return . pure . wrapInResponse (H.statusCode status) headers $ mempty
-  else case decodeUtf8' body of
-    Right responseBodyText ->
+    then return . pure . wrapInResponse (H.statusCode status) headers $ mempty
+    else case decodeUtf8' body of
+      Right responseBodyText ->
         return . pure . wrapInResponse (H.statusCode status) headers $ responseBodyText
-    Left err -> error "Expected a response body that is valid UTF-8."
+      Left err -> error "Expected a response body that is valid UTF-8."
 
 mkWaiRequest :: ApiGatewayRequest Text -> IO Wai.Request
-mkWaiRequest ApiGatewayRequest{..} = do
-  let ApiGatewayRequestContext{..} = apiGatewayRequestRequestContext
-      ApiGatewayRequestContextIdentity{..} = apiGatewayRequestContextIdentity
+mkWaiRequest ApiGatewayRequest {..} = do
+  let ApiGatewayRequestContext {..} = apiGatewayRequestRequestContext
+      ApiGatewayRequestContextIdentity {..} = apiGatewayRequestContextIdentity
 
   ip <- parseIp apiGatewayRequestContextIdentitySourceIp
 
-  let pathInfo = H.decodePathSegments (encodeUtf8 apiGatewayRequestPath)
+  let requestPath =
+        -- We prefer the proxied path because apiGatewayRequestPath also
+        -- includes the resource which we don't need
+        case apiGatewayRequestPathParameters of
+          Just pathParametersMap ->
+            case HMap.lookup "proxy" pathParametersMap of
+              Just proxyPath -> proxyPath
+              Nothing -> apiGatewayRequestPath
+          Nothing -> apiGatewayRequestPath
+
+  let pathInfo = H.decodePathSegments (encodeUtf8 requestPath)
 
   let requestBodyRaw = maybe mempty T.encodeUtf8 apiGatewayRequestBody
   let requestBodyLength = Wai.KnownLength $ fromIntegral $ BS.length requestBodyRaw
@@ -81,23 +93,24 @@ mkWaiRequest ApiGatewayRequest{..} = do
       rawQueryString = H.renderQuery True queryParameters
       httpVersion = getHttpVersion apiGatewayRequestContextProtocol
 
-  let result = Wai.Request
-                (encodeUtf8 apiGatewayRequestHttpMethod)
-                httpVersion
-                (encodeUtf8 apiGatewayRequestPath)
-                rawQueryString
-                (map toHeader $ HMap.toList headers)
-                True -- We assume it's always secure as we're passing through API Gateway
-                ip
-                pathInfo
-                queryParameters
-                requestBody
-                Vault.empty
-                requestBodyLength
-                requestHeaderHost
-                requestHeaderRange
-                requestHeaderReferer
-                requestHeaderUserAgent
+  let result =
+        Wai.Request
+          (encodeUtf8 apiGatewayRequestHttpMethod)
+          httpVersion
+          (encodeUtf8 requestPath)
+          rawQueryString
+          (map toHeader $ HMap.toList headers)
+          True -- We assume it's always secure as we're passing through API Gateway
+          ip
+          pathInfo
+          queryParameters
+          requestBody
+          Vault.empty
+          requestBodyLength
+          requestHeaderHost
+          requestHeaderRange
+          requestHeaderReferer
+          requestHeaderUserAgent
 
   return result
 
@@ -119,7 +132,7 @@ takeRequestBodyChunk requestBodyMVar = do
 toQueryStringParameters :: Maybe (HMap.HashMap Text Text) -> [H.QueryItem]
 toQueryStringParameters (Just params) =
   let toQueryItem (key, value) = (encodeUtf8 key, Just $ encodeUtf8 value)
-  in map toQueryItem $ HMap.toList params
+   in map toQueryItem $ HMap.toList params
 toQueryStringParameters _ = []
 
 parseIp :: Maybe Text -> IO Socket.SockAddr
@@ -127,19 +140,19 @@ parseIp sourceIpText =
   case sourceIpText of
     Just sourceIp ->
       case readMaybe (T.unpack sourceIp) of
-      Just ip ->
-        pure $ case ip of
-          IP.IPv4 ip4 ->
-            Socket.SockAddrInet
-              0 -- default port
-              (IP.toHostAddress ip4)
-          IP.IPv6 ip6 ->
-            Socket.SockAddrInet6
-              0 -- default port
-              0 -- flow info
-              (IP.toHostAddress6 ip6)
-              0 -- scope id
-      Nothing -> error "Could not parse source ip."
+        Just ip ->
+          pure $ case ip of
+            IP.IPv4 ip4 ->
+              Socket.SockAddrInet
+                0 -- default port
+                (IP.toHostAddress ip4)
+            IP.IPv6 ip6 ->
+              Socket.SockAddrInet6
+                0 -- default port
+                0 -- flow info
+                (IP.toHostAddress6 ip6)
+                0 -- scope id
+        Nothing -> error "Could not parse source ip."
     Nothing -> error "Missing source ip."
 
 processRequest :: Application -> Wai.Request -> IO Wai.Response
@@ -152,8 +165,8 @@ processRequest app req = do
 
 readResponse :: Wai.Response -> IO (H.Status, H.ResponseHeaders, ByteString)
 readResponse (Wai.responseToStream -> (st, hdrs, mkBody)) = do
-    body <- mkBody drainBody
-    pure (st, hdrs, body)
+  body <- mkBody drainBody
+  pure (st, hdrs, body)
   where
     drainBody :: Wai.StreamingBody -> IO ByteString
     drainBody body = do
@@ -163,11 +176,11 @@ readResponse (Wai.responseToStream -> (st, hdrs, mkBody)) = do
         (pure ())
       BL.toStrict . Binary.toLazyByteString <$> readIORef ioRef
 
-wrapInResponse
-  :: Int
-  -> H.ResponseHeaders
-  -> res
-  -> ApiGatewayResponse res
+wrapInResponse ::
+  Int ->
+  H.ResponseHeaders ->
+  res ->
+  ApiGatewayResponse res
 wrapInResponse code responseHeaders response =
   ApiGatewayResponse code responseHeaders response False
 
