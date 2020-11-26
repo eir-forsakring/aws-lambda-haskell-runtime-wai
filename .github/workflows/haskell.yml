@@ -14,19 +14,19 @@ jobs:
     - uses: mstksg/setup-stack@v1
     - uses: actions/cache@v1
       name: Cache ~/.stack
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       with:
         path: ~/.stack
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
         key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml') }}
         restore-keys: |
           ${{ runner.os }}-stack-
     - uses: actions/cache@v1
       name: Cache .stack-work
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: true    
       with:
         path: .stack-work
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
         key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('**/*.hs') }}
         restore-keys: |
           ${{ runner.os }}-stack-work-
