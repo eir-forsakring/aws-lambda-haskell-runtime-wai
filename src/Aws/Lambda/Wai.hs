@@ -4,10 +4,19 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Aws.Lambda.Wai (apiGatewayWaiHandler, ApiGatewayWaiHandler) where
+module Aws.Lambda.Wai
+  ( apiGatewayWaiHandler,
+    ApiGatewayWaiHandler,
+    albWaiHandler,
+    ALBWaiHandler,
+    ignoreALBPathPart,
+    ignoreNothing
+  )
+where
 
 import Aws.Lambda
 import Control.Concurrent.MVar
+import Control.Exception (throwIO)
 import Data.Aeson
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
@@ -31,26 +40,111 @@ import qualified Network.Socket as Socket
 import Network.Wai (Application)
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Internal as Wai
+import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
+import Data.Function ((&))
 
 type ApiGatewayWaiHandler = ApiGatewayRequest Text -> Context Application -> IO (Either (ApiGatewayResponse Text) (ApiGatewayResponse Text))
 
-apiGatewayWaiHandler :: ApiGatewayWaiHandler
-apiGatewayWaiHandler gatewayRequest context = do
+type ALBWaiHandler = ALBRequest Text -> Context Application -> IO (Either (ALBResponse Text) (ALBResponse Text))
+
+newtype ALBIgnoredPathPortion = ALBIgnoredPathPortion {unALBIgnoredPathPortion :: Text}
+
+ignoreALBPathPart :: Text -> Maybe ALBIgnoredPathPortion
+ignoreALBPathPart = Just . ALBIgnoredPathPortion
+
+ignoreNothing :: Maybe ALBIgnoredPathPortion
+ignoreNothing = Nothing
+
+albWaiHandler :: Maybe ALBIgnoredPathPortion -> ALBWaiHandler
+albWaiHandler ignoredPathPortion request context = do
   waiApplication <- readIORef (customContext context)
-  waiRequest <- mkWaiRequest gatewayRequest
+  waiRequest <- mkWaiRequestFromALB ignoredPathPortion request
 
   (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
 
   if BS.null body
-    then return . pure . wrapInResponse (H.statusCode status) headers $ mempty
+    then return . pure . mkALBResponse (H.statusCode status) headers $ mempty
     else case decodeUtf8' body of
       Right responseBodyText ->
-        return . pure . wrapInResponse (H.statusCode status) headers $ responseBodyText
+        return . pure . mkALBResponse (H.statusCode status) headers $ responseBodyText
       Left err -> error "Expected a response body that is valid UTF-8."
 
-mkWaiRequest :: ApiGatewayRequest Text -> IO Wai.Request
-mkWaiRequest ApiGatewayRequest {..} = do
+apiGatewayWaiHandler :: ApiGatewayWaiHandler
+apiGatewayWaiHandler request context = do
+  waiApplication <- readIORef (customContext context)
+  waiRequest <- mkWaiRequestFromApiGw request
+
+  (status, headers, body) <- processRequest waiApplication waiRequest >>= readResponse
+
+  if BS.null body
+    then return . pure . mkApiGatewayResponse (H.statusCode status) headers $ mempty
+    else case decodeUtf8' body of
+      Right responseBodyText ->
+        return . pure . mkApiGatewayResponse (H.statusCode status) headers $ responseBodyText
+      Left err -> error "Expected a response body that is valid UTF-8."
+
+mkWaiRequestFromALB :: Maybe ALBIgnoredPathPortion -> ALBRequest Text -> IO Wai.Request
+mkWaiRequestFromALB (fmap unALBIgnoredPathPortion -> pathPortionToIgnore) ALBRequest {..} = do
+  let sourceIpMay = albRequestHeaders >>= HMap.lookup "x-forwarded-for"
+
+  ip <- parseIp sourceIpMay
+
+  let requestPath =
+        case pathPortionToIgnore of
+          Just toIgnore ->
+            let toIgnoreSafe = "/" <> T.dropWhile (\c -> c == '/' || c == '\\') toIgnore
+                throwPathError =
+                  error $
+                    "Given path piece to ignore '"
+                      <> T.unpack toIgnoreSafe
+                      <> "' is longer than the received request path "
+                      <> T.unpack albRequestPath
+                      <> "!"
+             in fromMaybe throwPathError $ T.stripPrefix toIgnoreSafe albRequestPath
+          Nothing -> albRequestPath
+
+  -- TODO: Duplication
+  let pathInfo = H.decodePathSegments (encodeUtf8 requestPath)
+
+  let requestBodyRaw = maybe mempty T.encodeUtf8 albRequestBody
+  let requestBodyLength = Wai.KnownLength $ fromIntegral $ BS.length requestBodyRaw
+
+  requestBodyMVar <- newMVar requestBodyRaw
+
+  let requestBody = takeRequestBodyChunk requestBodyMVar
+  let headers = fromMaybe HMap.empty albRequestHeaders
+  let requestHeaderHost = encodeUtf8 <$> HMap.lookup "host" headers
+  let requestHeaderRange = encodeUtf8 <$> HMap.lookup "range" headers
+  let requestHeaderReferer = encodeUtf8 <$> HMap.lookup "referer" headers
+  let requestHeaderUserAgent = encodeUtf8 <$> HMap.lookup "User-Agent" headers
+
+  let queryParameters = toQueryStringParameters albRequestQueryStringParameters
+      rawQueryString = H.renderQuery True queryParameters
+      httpVersion = H.http11 -- ALB converts even HTTP/2 requests to 1.1
+  let result =
+        Wai.Request
+          (encodeUtf8 albRequestHttpMethod)
+          httpVersion
+          (encodeUtf8 requestPath)
+          rawQueryString
+          (map toHeader $ HMap.toList headers)
+          True -- We assume it's always secure as we're passing through API Gateway
+          ip
+          pathInfo
+          queryParameters
+          requestBody
+          Vault.empty
+          requestBodyLength
+          requestHeaderHost
+          requestHeaderRange
+          requestHeaderReferer
+          requestHeaderUserAgent
+
+  return result
+
+mkWaiRequestFromApiGw :: ApiGatewayRequest Text -> IO Wai.Request
+mkWaiRequestFromApiGw ApiGatewayRequest {..} = do
   let ApiGatewayRequestContext {..} = apiGatewayRequestRequestContext
       ApiGatewayRequestContextIdentity {..} = apiGatewayRequestContextIdentity
 
@@ -166,14 +260,6 @@ readResponse (Wai.responseToStream -> (st, hdrs, mkBody)) = do
         (\b -> atomicModifyIORef ioRef (\b' -> (b <> b', ())))
         (pure ())
       BL.toStrict . Binary.toLazyByteString <$> readIORef ioRef
-
-wrapInResponse ::
-  Int ->
-  H.ResponseHeaders ->
-  res ->
-  ApiGatewayResponse res
-wrapInResponse code responseHeaders response =
-  ApiGatewayResponse code responseHeaders response False
 
 toHeader :: (Text, Text) -> H.Header
 toHeader (name, val) = (CI.mk . encodeUtf8 $ name, encodeUtf8 val)
