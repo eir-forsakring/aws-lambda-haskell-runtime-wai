@@ -36,6 +36,9 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+    - -Werror
+    - -Wall
 
 tests:
   aws-lambda-haskell-runtime-wai-test:

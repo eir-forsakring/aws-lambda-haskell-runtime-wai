@@ -1,25 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Aws.Lambda.Wai
-  ( apiGatewayWaiHandler,
+  ( runWaiAsLambda,
+    apiGatewayWaiHandler,
     ApiGatewayWaiHandler,
     albWaiHandler,
     ALBWaiHandler,
     ignoreALBPathPart,
-    ignoreNothing
+    ignoreNothing,
   )
 where
 
 import Aws.Lambda
+import Aws.Lambda.Setup
 import Control.Concurrent.MVar
 import Control.Exception (throwIO)
-import Data.Aeson
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as Aeson
 import qualified Data.Binary.Builder as Binary
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -34,21 +32,48 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8', encodeUtf8)
 import qualified Data.Text.Encoding as T
 import qualified Data.Vault.Lazy as Vault
-import GHC.IO.Unsafe (unsafePerformIO)
 import qualified Network.HTTP.Types as H
 import qualified Network.Socket as Socket
 import Network.Wai (Application)
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Internal as Wai
 import System.Environment (lookupEnv)
+import qualified System.IO as IO
 import Text.Read (readMaybe)
-import Data.Function ((&))
 
 type ApiGatewayWaiHandler = ApiGatewayRequest Text -> Context Application -> IO (Either (ApiGatewayResponse Text) (ApiGatewayResponse Text))
 
 type ALBWaiHandler = ALBRequest Text -> Context Application -> IO (Either (ALBResponse Text) (ALBResponse Text))
 
 newtype ALBIgnoredPathPortion = ALBIgnoredPathPortion {unALBIgnoredPathPortion :: Text}
+
+runWaiAsLambda :: DispatcherOptions -> HandlerName -> Maybe ALBIgnoredPathPortion -> IO Application -> IO ()
+runWaiAsLambda options handlerName ignoredPath mkApp = do
+  let proxyTypeEnvVar = "ENV_PROXY_TYPE"
+  proxyTypeMay <- lookupEnv proxyTypeEnvVar
+
+  case proxyTypeMay of
+    Just proxyType ->
+      case proxyType of
+        "apigw" -> do
+          IO.print $ "Starting Lambda using API gateway handler '" <> unHandlerName handlerName <> "'."
+          runLambdaHaskellRuntime options mkApp id $ do
+            addAPIGatewayHandler handlerName apiGatewayWaiHandler
+        "alb" -> do
+          IO.print $ "Starting Lambda using ALB handler '" <> unHandlerName handlerName <> "'."
+          runLambdaHaskellRuntime options mkApp id $ do
+            addALBHandler handlerName (albWaiHandler ignoredPath)
+        other ->
+          throwIO $
+            userError $
+              "'" <> other <> "' is not a valid value for " <> proxyTypeEnvVar <> ". Supported values are 'apigw' and 'alb' (excluding ticks)."
+    Nothing ->
+      throwIO $
+        userError $
+          "Could not determine the proxy type to use for your Lambda function."
+            <> " Please set the "
+            <> proxyTypeEnvVar
+            <> " environment variable to 'apigw' or 'alb' (excluding ticks) to use API Gateway or ALB respectively."
 
 ignoreALBPathPart :: Text -> Maybe ALBIgnoredPathPortion
 ignoreALBPathPart = Just . ALBIgnoredPathPortion
@@ -68,7 +93,7 @@ albWaiHandler ignoredPathPortion request context = do
     else case decodeUtf8' body of
       Right responseBodyText ->
         return . pure . mkALBResponse (H.statusCode status) headers $ responseBodyText
-      Left err -> error "Expected a response body that is valid UTF-8."
+      Left err -> error $ "Expected a response body that is valid UTF-8: " <> show err
 
 apiGatewayWaiHandler :: ApiGatewayWaiHandler
 apiGatewayWaiHandler request context = do
@@ -82,7 +107,7 @@ apiGatewayWaiHandler request context = do
     else case decodeUtf8' body of
       Right responseBodyText ->
         return . pure . mkApiGatewayResponse (H.statusCode status) headers $ responseBodyText
-      Left err -> error "Expected a response body that is valid UTF-8."
+      Left err -> error $ "Expected a response body that is valid UTF-8: " <> show err
 
 mkWaiRequestFromALB :: Maybe ALBIgnoredPathPortion -> ALBRequest Text -> IO Wai.Request
 mkWaiRequestFromALB (fmap unALBIgnoredPathPortion -> pathPortionToIgnore) ALBRequest {..} = do
@@ -263,6 +288,3 @@ readResponse (Wai.responseToStream -> (st, hdrs, mkBody)) = do
 
 toHeader :: (Text, Text) -> H.Header
 toHeader (name, val) = (CI.mk . encodeUtf8 $ name, encodeUtf8 val)
-
-tshow :: Show a => a -> Text
-tshow = T.pack . show
