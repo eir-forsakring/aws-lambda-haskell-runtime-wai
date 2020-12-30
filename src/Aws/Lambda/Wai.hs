@@ -6,7 +6,7 @@
 
 module Aws.Lambda.Wai
   ( runWaiAsLambda,
-    runWaiAsProxiedHttp,
+    runWaiAsProxiedHttpLambda,
     WaiLambdaProxyType (..),
     apiGatewayWaiHandler,
     ApiGatewayWaiHandler,
@@ -54,13 +54,13 @@ data WaiLambdaProxyType
   = APIGateway
   | ALB (Maybe ALBIgnoredPathPortion)
 
-runWaiAsProxiedHttp ::
+runWaiAsProxiedHttpLambda ::
   DispatcherOptions ->
   Maybe ALBIgnoredPathPortion ->
   HandlerName ->
   IO Application ->
   IO ()
-runWaiAsProxiedHttp options ignoredAlbPath handlerName mkApp =
+runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
   runLambdaHaskellRuntime options mkApp id $ do
     addStandaloneLambdaHandler handlerName $ \(request :: Value) context ->
       case parse parseIsAlb request of
