@@ -7,6 +7,7 @@
 module Aws.Lambda.Wai
   ( runWaiAsLambda,
     runWaiAsProxiedHttp,
+    WaiLambdaProxyType (..),
     apiGatewayWaiHandler,
     ApiGatewayWaiHandler,
     albWaiHandler,
