@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Aws.Lambda.Wai
   ( runWaiAsLambda,
+    runWaiAsProxiedHttp,
     apiGatewayWaiHandler,
     ApiGatewayWaiHandler,
     albWaiHandler,
@@ -15,9 +17,10 @@ module Aws.Lambda.Wai
 where
 
 import Aws.Lambda
-import Aws.Lambda.Setup
 import Control.Concurrent.MVar
-import Control.Exception (throwIO)
+import Data.Aeson
+import Data.Aeson.Types
+import Data.Bifunctor (Bifunctor (bimap))
 import qualified Data.Binary.Builder as Binary
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -37,7 +40,6 @@ import qualified Network.Socket as Socket
 import Network.Wai (Application)
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Internal as Wai
-import System.Environment (lookupEnv)
 import qualified System.IO as IO
 import Text.Read (readMaybe)
 
@@ -47,33 +49,65 @@ type ALBWaiHandler = ALBRequest Text -> Context Application -> IO (Either (ALBRe
 
 newtype ALBIgnoredPathPortion = ALBIgnoredPathPortion {unALBIgnoredPathPortion :: Text}
 
-runWaiAsLambda :: DispatcherOptions -> HandlerName -> Maybe ALBIgnoredPathPortion -> IO Application -> IO ()
-runWaiAsLambda options handlerName ignoredPath mkApp = do
-  let proxyTypeEnvVar = "ENV_PROXY_TYPE"
-  proxyTypeMay <- lookupEnv proxyTypeEnvVar
+data WaiLambdaProxyType
+  = APIGateway
+  | ALB (Maybe ALBIgnoredPathPortion)
 
-  case proxyTypeMay of
-    Just proxyType ->
-      case proxyType of
-        "apigw" -> do
-          IO.print $ "Starting Lambda using API gateway handler '" <> unHandlerName handlerName <> "'."
-          runLambdaHaskellRuntime options mkApp id $ do
-            addAPIGatewayHandler handlerName apiGatewayWaiHandler
-        "alb" -> do
-          IO.print $ "Starting Lambda using ALB handler '" <> unHandlerName handlerName <> "'."
-          runLambdaHaskellRuntime options mkApp id $ do
-            addALBHandler handlerName (albWaiHandler ignoredPath)
-        other ->
-          throwIO $
-            userError $
-              "'" <> other <> "' is not a valid value for " <> proxyTypeEnvVar <> ". Supported values are 'apigw' and 'alb' (excluding ticks)."
-    Nothing ->
-      throwIO $
-        userError $
-          "Could not determine the proxy type to use for your Lambda function."
-            <> " Please set the "
-            <> proxyTypeEnvVar
-            <> " environment variable to 'apigw' or 'alb' (excluding ticks) to use API Gateway or ALB respectively."
+runWaiAsProxiedHttp ::
+  DispatcherOptions ->
+  Maybe ALBIgnoredPathPortion ->
+  HandlerName ->
+  IO Application ->
+  IO ()
+runWaiAsProxiedHttp options ignoredAlbPath handlerName mkApp =
+  runLambdaHaskellRuntime options mkApp id $ do
+    addStandaloneLambdaHandler handlerName $ \(request :: Value) context ->
+      case parse parseIsAlb request of
+        Success isAlb ->
+          if isAlb
+            then case fromJSON @(ALBRequest Text) request of
+              Success albRequest -> do
+                bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
+              Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
+            else case fromJSON @(ApiGatewayRequest Text) request of
+              Success apiGwRequest ->
+                bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
+              Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
+        Error err ->
+          error $
+            "Could not parse the request as a valid API Gateway or ALB proxy request: " <> err
+  where
+    parseIsAlb :: Value -> Parser Bool
+    parseIsAlb = withObject "Request" $ \obj -> do
+      evtMay <- obj .:? "evt"
+      case evtMay of
+        Just evt -> do
+          requestContextMay <- evt .:? "requestContext"
+          case requestContextMay of
+            Just requestContext -> do
+              elb <- requestContext .:? "elb"
+              case elb of
+                Just (_ :: Value) -> pure True
+                Nothing -> pure False
+            Nothing -> pure False
+        Nothing -> pure False
+
+runWaiAsLambda ::
+  WaiLambdaProxyType ->
+  DispatcherOptions ->
+  HandlerName ->
+  IO Application ->
+  IO ()
+runWaiAsLambda proxyType options handlerName mkApp = do
+  case proxyType of
+    APIGateway -> do
+      IO.print $ "Starting Lambda using API gateway handler '" <> unHandlerName handlerName <> "'."
+      runLambdaHaskellRuntime options mkApp id $ do
+        addAPIGatewayHandler handlerName apiGatewayWaiHandler
+    (ALB ignoredPath) -> do
+      IO.print $ "Starting Lambda using ALB handler '" <> unHandlerName handlerName <> "'."
+      runLambdaHaskellRuntime options mkApp id $ do
+        addALBHandler handlerName (albWaiHandler ignoredPath)
 
 ignoreALBPathPart :: Text -> Maybe ALBIgnoredPathPortion
 ignoreALBPathPart = Just . ALBIgnoredPathPortion
