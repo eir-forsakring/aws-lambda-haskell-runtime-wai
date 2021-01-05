@@ -62,16 +62,19 @@ runWaiAsProxiedHttpLambda ::
   IO ()
 runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
   runLambdaHaskellRuntime options mkApp id $ do
-    addStandaloneLambdaHandler handlerName $ \(request :: Value) context ->
+    addStandaloneLambdaHandler handlerName $ \(request :: Value) context -> do
+      IO.print $ "REQUEST RAW: " <> show request
       case parse parseIsAlb request of
-        Success isAlb ->
+        Success isAlb -> do
+          IO.print $ "ALB REQUEST RAW: " <> show (fromJSON @(ALBRequest Text) request)
           if isAlb
             then case fromJSON @(ALBRequest Text) request of
               Success albRequest -> do
                 bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
               Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
             else case fromJSON @(ApiGatewayRequest Text) request of
-              Success apiGwRequest ->
+              Success apiGwRequest -> do
+                IO.print $ "API GATEWAY REQUEST RAW: " <> show (fromJSON @(ApiGatewayRequest Text) request)
                 bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
               Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
         Error err ->

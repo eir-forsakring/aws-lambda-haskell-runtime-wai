@@ -3,7 +3,18 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    name: aws-lambda-haskell-runtime
+    version: 4.0.0
+    git: https://github.com/dnikolovv/aws-lambda-haskell-runtime.git
+    pantry-tree:
+      size: 3486
+      sha256: 4158e66ca567307a37a955f4c377c85e4646ad2cff1cabba2de52da59c000199
+    commit: 3a9d26dee8a39fdbe7bd26bc0ec058f904cdf828
+  original:
+    git: https://github.com/dnikolovv/aws-lambda-haskell-runtime.git
+    commit: 3a9d26dee8a39fdbe7bd26bc0ec058f904cdf828
 snapshots:
 - completed:
     size: 532377
