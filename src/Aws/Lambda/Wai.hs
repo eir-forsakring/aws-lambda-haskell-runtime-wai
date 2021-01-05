@@ -66,15 +66,15 @@ runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
       IO.print $ "REQUEST RAW: " <> show request
       case parse parseIsAlb request of
         Success isAlb -> do
-          IO.print $ "ALB REQUEST RAW: " <> show (fromJSON @(ALBRequest Text) request)
           if isAlb
             then case fromJSON @(ALBRequest Text) request of
               Success albRequest -> do
+                IO.print $ "ALB REQUEST: " <> show (fromJSON @(ALBRequest Text) request)
                 bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
               Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
             else case fromJSON @(ApiGatewayRequest Text) request of
               Success apiGwRequest -> do
-                IO.print $ "API GATEWAY REQUEST RAW: " <> show (fromJSON @(ApiGatewayRequest Text) request)
+                IO.print $ "API GATEWAY REQUEST: " <> show (fromJSON @(ApiGatewayRequest Text) request)
                 bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
               Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
         Error err ->
@@ -83,16 +83,12 @@ runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
   where
     parseIsAlb :: Value -> Parser Bool
     parseIsAlb = withObject "Request" $ \obj -> do
-      evtMay <- obj .:? "evt"
-      case evtMay of
-        Just evt -> do
-          requestContextMay <- evt .:? "requestContext"
-          case requestContextMay of
-            Just requestContext -> do
-              elb <- requestContext .:? "elb"
-              case elb of
-                Just (_ :: Value) -> pure True
-                Nothing -> pure False
+      requestContextMay <- obj .:? "requestContext"
+      case requestContextMay of
+        Just requestContext -> do
+          elb <- requestContext .:? "elb"
+          case elb of
+            Just (_ :: Value) -> pure True
             Nothing -> pure False
         Nothing -> pure False
 
