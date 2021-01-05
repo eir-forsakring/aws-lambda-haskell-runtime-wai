@@ -61,20 +61,17 @@ runWaiAsProxiedHttpLambda ::
   IO Application ->
   IO ()
 runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
-  runLambdaHaskellRuntime options mkApp id $ do
-    addStandaloneLambdaHandler handlerName $ \(request :: Value) context -> do
-      IO.print $ "REQUEST RAW: " <> show request
+  runLambdaHaskellRuntime options mkApp id $
+    addStandaloneLambdaHandler handlerName $ \(request :: Value) context ->
       case parse parseIsAlb request of
         Success isAlb -> do
           if isAlb
             then case fromJSON @(ALBRequest Text) request of
-              Success albRequest -> do
-                IO.print $ "ALB REQUEST: " <> show (fromJSON @(ALBRequest Text) request)
+              Success albRequest ->
                 bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
               Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
             else case fromJSON @(ApiGatewayRequest Text) request of
-              Success apiGwRequest -> do
-                IO.print $ "API GATEWAY REQUEST: " <> show (fromJSON @(ApiGatewayRequest Text) request)
+              Success apiGwRequest ->
                 bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
               Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
         Error err ->
@@ -214,9 +211,9 @@ mkWaiRequestFromApiGw ApiGatewayRequest {..} = do
         -- includes the resource which we don't need
         case apiGatewayRequestPathParameters of
           Just pathParametersMap ->
-            case HMap.lookup "proxy" pathParametersMap of
-              Just proxyPath -> proxyPath
-              Nothing -> apiGatewayRequestPath
+            fromMaybe
+              apiGatewayRequestPath
+              (HMap.lookup "proxy" pathParametersMap)
           Nothing -> apiGatewayRequestPath
 
   let pathInfo = H.decodePathSegments (encodeUtf8 requestPath)
