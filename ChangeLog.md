@@ -1,5 +1,10 @@
 # Changelog for aws-lambda-haskell-runtime-wai
 
+## 2.0.0
+
+* Using version [`4.0.0`](https://github.com/theam/aws-lambda-haskell-runtime/pull/97) of `aws-lambda-haskell-runtime`.
+* New handler types that allow you to support ALB or even API Gateway + ALB at once.
+
 ## 1.0.3
 
 * Now taking the Wai request path from API Gateway's 'proxy' path parameter. This prevents the resource path from messing up your Wai application routing.
