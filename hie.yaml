@@ -1,0 +1,7 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "aws-lambda-haskell-runtime-wai:lib"
+
+    - path: "./test"
+      component: "aws-lambda-haskell-runtime-wai:test:aws-lambda-haskell-runtime-wai-test"

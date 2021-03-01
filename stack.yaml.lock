@@ -5,15 +5,15 @@
 
 packages:
 - completed:
-    hackage: aws-lambda-haskell-runtime-3.0.4@sha256:1cf55a477befe5084bf1600c78f57784b6f94735cf3cfb5f13d1fcfd88b57547,3015
+    hackage: aws-lambda-haskell-runtime-4.0.1@sha256:325704979a6e2be21dac89acaa6a159fbea4dd2ce1f022860abcfbac3f41a7de,2916
     pantry-tree:
-      size: 1560
-      sha256: 51b6043b373e5260b2e37b48cd0104af9d327a0244dfa0d9f6e2d5a45a600035
+      size: 1453
+      sha256: 489fe49e75d19b7e4a298b246dcea3c48dfac8d73611a1715222e94a64fd3129
   original:
-    hackage: aws-lambda-haskell-runtime-3.0.4
+    hackage: aws-lambda-haskell-runtime-4.0.1@sha256:325704979a6e2be21dac89acaa6a159fbea4dd2ce1f022860abcfbac3f41a7de,2916
 snapshots:
 - completed:
-    size: 496120
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/16.yaml
-    sha256: cf30623a2c147f51eecc8f9d6440f5d1b671af21380505e633faff32b565f3d5
-  original: lts-15.16
+    size: 532377
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/12.yaml
+    sha256: f914cfa23fef85bdf895e300a8234d9d0edc2dbec67f4bc9c53f85867c50eab6
+  original: lts-16.12
