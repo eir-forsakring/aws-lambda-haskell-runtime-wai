@@ -40,7 +40,7 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-- aws-lambda-haskell-runtime-4.1.0@sha256:4fbf9855326ed0173c3ef27c006412c8da46f84b0566fa92a44ad0e988432d82,2916
+- aws-lambda-haskell-runtime-4.1.1@sha256:c3b3452d3a7f36950c22760fe44b51d49b43624fa3a0253e5bfc3d94809bb8fd,3024
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
