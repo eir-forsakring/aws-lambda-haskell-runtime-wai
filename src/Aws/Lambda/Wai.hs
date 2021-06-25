@@ -14,12 +14,14 @@ module Aws.Lambda.Wai
     ALBWaiHandler,
     ignoreALBPathPart,
     ignoreNothing,
-    waiHandler
+    waiHandler,
+    runMultipleWaiApplications,
   )
 where
 
 import Aws.Lambda
 import Control.Concurrent.MVar
+import Control.Monad (forM, forM_)
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Bifunctor (Bifunctor (bimap))
@@ -28,6 +30,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.CaseInsensitive as CI
+import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HMap
 import Data.IORef
 import qualified Data.IP as IP
@@ -66,6 +69,37 @@ runWaiAsProxiedHttpLambda ::
 runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
   runLambdaHaskellRuntime options mkApp id $
     addStandaloneLambdaHandler handlerName (waiHandler ignoredAlbPath)
+
+runMultipleWaiApplications ::
+  DispatcherOptions ->
+  HashMap HandlerName (Maybe ALBIgnoredPathPortion, IO Application) ->
+  IO ()
+runMultipleWaiApplications options handlersAndApps = do
+  runLambdaHaskellRuntime options initializeApplications id $
+    forM_ (HMap.keys handlersAndApps) $ \handler ->
+      addStandaloneLambdaHandler handler $ \request context ->
+        multiApplicationWaiHandler handler request context
+  where
+    initializeApplications :: IO (HashMap HandlerName (Maybe ALBIgnoredPathPortion, Application))
+    initializeApplications = do
+      HMap.fromList
+        <$> forM
+          (HMap.toList handlersAndApps)
+          (\(handler, (alb, mkApp)) -> mkApp >>= \app -> return (handler, (alb, app)))
+
+multiApplicationWaiHandler ::
+  HandlerName ->
+  Value ->
+  Context (HashMap HandlerName (Maybe ALBIgnoredPathPortion, Application)) ->
+  IO (Either Value Value)
+multiApplicationWaiHandler handlerName request context = do
+  appMay <- HMap.lookup handlerName <$> readIORef (customContext context)
+  case appMay of
+    Just (ignoredAlbPart, app) -> do
+      applicationRef <- newIORef app
+      waiHandler ignoredAlbPart request (context {customContext = applicationRef})
+    Nothing ->
+      fail $ "No application was registered for handler '" <> T.unpack (unHandlerName handlerName) <> "'."
 
 waiHandler ::
   Maybe ALBIgnoredPathPortion ->

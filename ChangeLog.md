@@ -3,6 +3,7 @@
 ## 2.0.2
 
 * Make registering multiple wai handlers possible (via `waiHandler`).
+* Make registering multiple handlers with multiple Wai Applications possible (via `runMultipleWaiApplications`).
 * Use version `4.1.1` of `aws-lambda-haskell-runtime`.
 
 ## 2.0.1

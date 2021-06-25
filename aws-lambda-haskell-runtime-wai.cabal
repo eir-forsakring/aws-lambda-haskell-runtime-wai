@@ -1,13 +1,13 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7ac059dff419276eecdd9bc3935ba4601d6b8e0ea70b452264ca490df133487a
+-- hash: 4f70c32a7c39e85a18faf7ec170f65c5e46116d8f23661e3aa358ca1b1a913b9
 
 name:           aws-lambda-haskell-runtime-wai
-version:        2.0.1
+version:        2.0.2
 synopsis:       Run wai applications on AWS Lambda
 description:    Please see the README on GitHub at <https://github.com/eir-forsakring/aws-lambda-haskell-runtime-wai#readme>
 category:       AWS
