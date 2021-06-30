@@ -14,11 +14,14 @@ module Aws.Lambda.Wai
     ALBWaiHandler,
     ignoreALBPathPart,
     ignoreNothing,
+    waiHandler,
+    runMultipleWaiApplications,
   )
 where
 
 import Aws.Lambda
 import Control.Concurrent.MVar
+import Control.Monad (forM, forM_)
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Bifunctor (Bifunctor (bimap))
@@ -27,6 +30,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.CaseInsensitive as CI
+import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HMap
 import Data.IORef
 import qualified Data.IP as IP
@@ -48,6 +52,8 @@ type ApiGatewayWaiHandler = ApiGatewayRequest Text -> Context Application -> IO 
 
 type ALBWaiHandler = ALBRequest Text -> Context Application -> IO (Either (ALBResponse Text) (ALBResponse Text))
 
+type GenericWaiHandler = Value -> Context Application -> IO (Either Value Value)
+
 newtype ALBIgnoredPathPortion = ALBIgnoredPathPortion {unALBIgnoredPathPortion :: Text}
 
 data WaiLambdaProxyType
@@ -62,21 +68,57 @@ runWaiAsProxiedHttpLambda ::
   IO ()
 runWaiAsProxiedHttpLambda options ignoredAlbPath handlerName mkApp =
   runLambdaHaskellRuntime options mkApp id $
-    addStandaloneLambdaHandler handlerName $ \(request :: Value) context ->
-      case parse parseIsAlb request of
-        Success isAlb -> do
-          if isAlb
-            then case fromJSON @(ALBRequest Text) request of
-              Success albRequest ->
-                bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
-              Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
-            else case fromJSON @(ApiGatewayRequest Text) request of
-              Success apiGwRequest ->
-                bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
-              Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
-        Error err ->
-          error $
-            "Could not parse the request as a valid API Gateway or ALB proxy request: " <> err
+    addStandaloneLambdaHandler handlerName (waiHandler ignoredAlbPath)
+
+runMultipleWaiApplications ::
+  DispatcherOptions ->
+  HashMap HandlerName (Maybe ALBIgnoredPathPortion, IO Application) ->
+  IO ()
+runMultipleWaiApplications options handlersAndApps = do
+  runLambdaHaskellRuntime options initializeApplications id $
+    forM_ (HMap.keys handlersAndApps) $ \handler ->
+      addStandaloneLambdaHandler handler $ \request context ->
+        multiApplicationWaiHandler handler request context
+  where
+    initializeApplications :: IO (HashMap HandlerName (Maybe ALBIgnoredPathPortion, Application))
+    initializeApplications = do
+      HMap.fromList
+        <$> forM
+          (HMap.toList handlersAndApps)
+          (\(handler, (alb, mkApp)) -> mkApp >>= \app -> return (handler, (alb, app)))
+
+multiApplicationWaiHandler ::
+  HandlerName ->
+  Value ->
+  Context (HashMap HandlerName (Maybe ALBIgnoredPathPortion, Application)) ->
+  IO (Either Value Value)
+multiApplicationWaiHandler handlerName request context = do
+  appMay <- HMap.lookup handlerName <$> readIORef (customContext context)
+  case appMay of
+    Just (ignoredAlbPart, app) -> do
+      applicationRef <- newIORef app
+      waiHandler ignoredAlbPart request (context {customContext = applicationRef})
+    Nothing ->
+      fail $ "No application was registered for handler '" <> T.unpack (unHandlerName handlerName) <> "'."
+
+waiHandler ::
+  Maybe ALBIgnoredPathPortion ->
+  GenericWaiHandler
+waiHandler ignoredAlbPath request context =
+  case parse parseIsAlb request of
+    Success isAlb -> do
+      if isAlb
+        then case fromJSON @(ALBRequest Text) request of
+          Success albRequest ->
+            bimap toJSON toJSON <$> albWaiHandler ignoredAlbPath albRequest context
+          Error err -> error $ "Could not parse the request as a valid ALB request: " <> err
+        else case fromJSON @(ApiGatewayRequest Text) request of
+          Success apiGwRequest ->
+            bimap toJSON toJSON <$> apiGatewayWaiHandler apiGwRequest context
+          Error err -> error $ "Could not parse the request as a valid API Gateway request: " <> err
+    Error err ->
+      error $
+        "Could not parse the request as a valid API Gateway or ALB proxy request: " <> err
   where
     parseIsAlb :: Value -> Parser Bool
     parseIsAlb = withObject "Request" $ \obj -> do
