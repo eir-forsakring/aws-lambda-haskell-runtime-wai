@@ -56,8 +56,7 @@ type GenericWaiHandler = Value -> Context Application -> IO (Either Value Value)
 
 newtype ALBIgnoredPathPortion = ALBIgnoredPathPortion {unALBIgnoredPathPortion :: Text}
 
-data WaiLambdaProxyType
-  = APIGateway
+data WaiLambdaProxyType  = APIGateway
   | ALB (Maybe ALBIgnoredPathPortion)
 
 runWaiAsProxiedHttpLambda ::

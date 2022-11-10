@@ -5,22 +5,26 @@
 
 packages:
 - completed:
-    hackage: aws-lambda-haskell-runtime-4.1.1@sha256:c3b3452d3a7f36950c22760fe44b51d49b43624fa3a0253e5bfc3d94809bb8fd,3024
-    pantry-tree:
-      size: 1453
-      sha256: b7e8426edb0b5d06713a26362308abbec03379e1f3ad9c6d63973088ad75cf62
-  original:
-    hackage: aws-lambda-haskell-runtime-4.1.1@sha256:c3b3452d3a7f36950c22760fe44b51d49b43624fa3a0253e5bfc3d94809bb8fd,3024
-- completed:
     hackage: safe-exceptions-checked-0.1.0@sha256:ae142f284c6b102f0e7606a69a5719f4f72771d9cc353af72fa4484326689100,1603
     pantry-tree:
-      size: 298
       sha256: d1f8ba50967547f26cdc37cbc64bdc85af57d856986876a6a5767a61977bc299
+      size: 298
   original:
     hackage: safe-exceptions-checked-0.1.0@sha256:ae142f284c6b102f0e7606a69a5719f4f72771d9cc353af72fa4484326689100,1603
+- completed:
+    commit: 3845d73325036aa6871c51981ffc348917622c78
+    git: https://github.com/eir-forsakring/aws-lambda-haskell-runtime
+    name: aws-lambda-haskell-runtime
+    pantry-tree:
+      sha256: 5c0610fe7052a8e8205b5dc59807a29dc13cd766cb69e282cb3fa11006c0ddf8
+      size: 3424
+    version: 4.1.1
+  original:
+    commit: 3845d73325036aa6871c51981ffc348917622c78
+    git: https://github.com/eir-forsakring/aws-lambda-haskell-runtime
 snapshots:
 - completed:
-    size: 576531
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2021/4/6.yaml
-    sha256: 6ce168aed6ba23cfe148061587ba1c0f24a09d4cad8b1a5a29b21878e33d6ef4
-  original: nightly-2021-04-06
+    sha256: e5f56f619132209b826084cacd6374d7f0344cc88a9d1d305878190e4204ae1f
+    size: 619205
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/31.yaml
+  original: lts-19.31
